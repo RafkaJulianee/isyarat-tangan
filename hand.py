@@ -1,92 +1,86 @@
 import cv2
 import mediapipe as mp
-import numpy as np
-from gtts import gTTS
-import os
 import time
-from sklearn.neighbors import KNeighborsClassifier
+from playsound import playsound
+import threading
 
-# === Setup MediaPipe ===
-mp_hands = mp.solutions.hands
-hands = mp_hands.Hands(max_num_hands=1, min_detection_confidence=0.7)
-mp_draw = mp.solutions.drawing_utils
+# Buka modul mediapipe tangan
+tangan_mp = mp.solutions.hands
+gambar_mp = mp.solutions.drawing_utils
+deteksi_tangan = tangan_mp.Hands(min_detection_confidence=0.7, min_tracking_confidence=0.7)
 
-# === Dataset sederhana (contoh gesture) ===
-X_train = [
-    [1,1,1,1,1],   # ✋ semua jari
-    [0,0,0,0,0],   # ✊ kepalan
-    [0,1,0,0,0],   # 👉 telunjuk
-    [0,1,1,0,0],   # ✌️ peace
-    [1,0,0,0,0],   # 👍 jempol
-    [1,0,0,0,1],   # 🤙 jempol+kelingking
-    [0,1,0,0,1],   # 🤘 rock
-    [0,1,1,1,0],   # 🖖 scout
-    [0,0,1,0,0],   # 🖕 tengah aja
-    [1,1,0,0,0],   # 👌 oke
-]
-y_train = [
-    "Halo, apa kabar?",
-    "Saya baik-baik saja",
-    "Nama saya Rafka",
-    "Terima kasih",
-    "Bagus!",
-    "Sampai jumpa",
-    "Ayo semangat!",
-    "Salam kenal",
-    "Jangan marah dong",
-    "Oke sip"
-]
+# Buat ngatur biar suara gak keulang-ulang terus
+suara_terakhir = None
+waktu_terakhir = 0
 
-# Latih model KNN
-clf = KNeighborsClassifier(n_neighbors=1)
-clf.fit(X_train, y_train)
+# Fungsi buat muter suara (pake thread biar gak bikin aplikasi nge-freeze)
+def putar_suara(file):
+    def _mainkan():
+        playsound(f"voice/{file}")
+    threading.Thread(target=_mainkan).start()
 
-# === Kamera ===
-cap = cv2.VideoCapture(0)
+# Fungsi buat cek gaya tangan (gesture)
+def cek_gaya_tangan(titik_tangan):
+    # Id ujung jari (telunjuk, tengah, manis, kelingking)
+    ujung_jari = [8, 12, 16, 20]
+    sendi_jari = [6, 10, 14, 18]
 
-last_text = ""
-last_time = 0
+    status_jari = []
+    for ujung, sendi in zip(ujung_jari, sendi_jari):
+        # Kalo posisi ujung jari lebih tinggi dari sendinya → dianggap ngacung
+        status_jari.append(titik_tangan.landmark[ujung].y < titik_tangan.landmark[sendi].y)
 
-def cek_jari(hand_landmarks):
-    jari = []
-    tip_ids = [4, 8, 12, 16, 20]
-    for i in tip_ids:
-        if hand_landmarks.landmark[i].y < hand_landmarks.landmark[i-2].y:
-            jari.append(1)
-        else:
-            jari.append(0)
-    return jari
+    # Cek jempol (pakai sumbu x karena arahnya beda)
+    jempol = titik_tangan.landmark[4].x < titik_tangan.landmark[3].x
 
-def play_tts(text):
-    global last_text, last_time
-    if text != last_text or (time.time() - last_time) > 3:  # biar ga spam
-        tts = gTTS(text=text, lang='id')
-        filename = "voice.mp3"
-        tts.save(filename)
-        os.system(f"start {filename}")  # Windows
-        last_text = text
-        last_time = time.time()
+    # Gerakan Tangan
+    if all(status_jari):
+        return "my_name_is_rafka julian.mp3"   # Semua jari terbuka
+    elif status_jari[0] and not any(status_jari[1:]):
+        return "salam_kenal.mp3"               # Cuma telunjuk
+    elif jempol and not any(status_jari):
+        return "hello_world.mp3"               # Cuma jempol
+    elif jempol and status_jari[3] and not status_jari[0:3]:
+        return "apa_kabar.mp3"           # Jempol + kelingking
+    elif status_jari[0] and status_jari[1] and not status_jari[2:] and not jempol:
+        return "setia.mp3"                     # Telunjuk + tengah
+    else:
+        return None
 
-while True:
-    success, img = cap.read()
-    img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-    results = hands.process(img_rgb)
+# Nyalain kamera
+kamera = cv2.VideoCapture(0)
 
-    if results.multi_hand_landmarks:
-        for handLms in results.multi_hand_landmarks:
-            mp_draw.draw_landmarks(img, handLms, mp_hands.HAND_CONNECTIONS)
-
-            jari = cek_jari(handLms)
-
-            if len(jari) == 5:
-                gesture = clf.predict([jari])[0]
-                cv2.putText(img, gesture, (50,100), cv2.FONT_HERSHEY_SIMPLEX,
-                            1.2, (0,255,0), 3)
-                play_tts(gesture)
-
-    cv2.imshow("Bahasa Isyarat", img)
-    if cv2.waitKey(1) & 0xFF == ord('q'):
+while kamera.isOpened():
+    ret, frame = kamera.read()
+    if not ret:
         break
 
-cap.release()
+    # Biar mediapipe bisa baca (ubah jadi RGB)
+    gambar_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+    hasil = deteksi_tangan.process(gambar_rgb)
+
+    # Kalau ada tangan ketangkep kamera
+    if hasil.multi_hand_landmarks:
+        for titik_tangan in hasil.multi_hand_landmarks:
+            gambar_mp.draw_landmarks(frame, titik_tangan, tangan_mp.HAND_CONNECTIONS)
+
+            gaya = cek_gaya_tangan(titik_tangan)
+
+            if gaya:
+                # Kasih jeda 2 detik biar suara gak spam
+                if gaya != suara_terakhir or time.time() - waktu_terakhir > 2:
+                    putar_suara(gaya)
+                    suara_terakhir = gaya
+                    waktu_terakhir = time.time()
+
+                # Tulis teks nama gaya di layar
+                cv2.putText(frame, gaya.replace(".mp3", ""), (50, 50),
+                            cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+
+    cv2.imshow("Deteksi Gaya Tangan", frame)
+
+    if cv2.waitKey(1) & 0xFF == 27:  # ESC buat keluar
+        break
+
+kamera.release()
 cv2.destroyAllWindows()
