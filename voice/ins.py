@@ -6,11 +6,9 @@ os.makedirs("voices", exist_ok=True)
 
 # List kata-kata/kalimat yang mau dibuat audio
 texts = {
-    "hello_world": "Hello world!",
-    "my_name_is_rafka Julian": "My Name is Rafka Julian",
-    "salam_kenal": "Salam Kenal Ya",
-    "apa_kabar": "Apa kabar?",
-    "baiklah": "Baiklah"
+    "Emyu Stay du Goa": "Emyu Stay di goa",
+    "Ini Adalah isyarat tangan dengan python": "Ini Adalah isyarat tangan dengan python",
+  
 }
 
 # Generate audio file

@@ -22,8 +22,8 @@ def cek_gaya(titik):
     jari = [titik.landmark[u].y < titik.landmark[s].y for u, s in zip(ujung, sendi)]
     jempol = titik.landmark[4].x < titik.landmark[3].x
 
-    if all(jari): return "my_name_is_rafka julian.mp3"
-    if jari[0] and not any(jari[1:]): return "salam_kenal.mp3"
+    if all(jari): return "Ini Adalah isyarat tangan dengan python.mp3"
+    if jari[0] and not any(jari[1:]): return "Emyu Stay du Goa.mp3"
     if jempol and not any(jari): return "hello_world.mp3"
     if jempol and jari[3] and not jari[0:3]: return "nama_saya_rafka.mp3"
     if jari[0] and jari[1] and not jari[2:] and not jempol: return "setia.mp3"
